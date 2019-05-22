@@ -179,7 +179,7 @@ header "Installing meteor" | output "$LOG_FILE"
 METEOR_DIR="$CACHE_DIR/meteor"
 mkdir -p "$METEOR_DIR"
 curl -sS "https://install.meteor.com/" | HOME="$METEOR_DIR" /bin/sh
-PATH="$METEOR_DIR/.meteor:"
+export PATH="$METEOR_DIR/.meteor":$PATH
 
 restore_cache() {
   local cache_status cache_directories
