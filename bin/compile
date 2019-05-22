@@ -342,6 +342,20 @@ cat > "$BUILD_DIR"/.profile.d/path.sh <<EOF
   export LD_LIBRARY_PATH=\$LD_LIBRARY_PATH:\$HOME/$COMPILE_DIR_SUFFIX/lib
 EOF
 
+#
+# Extras
+#
+
+# source scripts in 'extra' dir, if any.  Create them for custom stuff like
+# binary dependencies, additional environment settings, etc.
+echo "-----> Running extras"
+for file in `ls "$BUILDPACK_DIR"/extra | sort`; do
+  . "$BUILDPACK_DIR"/extra/$file
+done
+
+#
+# Clear cache after build is done
+#
 echo "-----> Clearing cache dir."
 rm -rf $METEOR_DIR
 
