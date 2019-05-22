@@ -244,7 +244,7 @@ COMPILE_DIR_SUFFIX=".meteor/heroku_build"
 COMPILE_DIR="$BUILD_DIR"/"$COMPILE_DIR_SUFFIX"
 # Try to minimize meteor's printing, unless we're running verbosely.
 if [ -z "$BUILDPACK_VERBOSE" ]; then
-#  METEOR_PRETTY_OUTPUT=0
+  METEOR_PRETTY_OUTPUT=0
 fi
 
 # Create directories as needed.
