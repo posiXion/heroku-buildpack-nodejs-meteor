@@ -176,8 +176,8 @@ header "Installing binaries" | output "$LOG_FILE"
 install_bins | output "$LOG_FILE"
 
 header "Installing meteor" | output "$LOG_FILE"
-mkdir -p "$METEOR_DIR"
 METEOR_DIR="$CACHE_DIR/meteor"
+mkdir -p "$METEOR_DIR"
 curl -sS "https://install.meteor.com/" | HOME="$METEOR_DIR" /bin/sh
 PATH="$METEOR_DIR/.meteor:"
 
