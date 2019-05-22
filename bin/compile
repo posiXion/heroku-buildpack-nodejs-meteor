@@ -323,12 +323,28 @@ mv $BUNDLE_DEST/bundle "$COMPILE_DIR/app"
 rmdir $BUNDLE_DEST
 
 # Run npm install on the built slug; only for '--production' dependencies.
-echo "-----> Installing npm production dependencies on built slug"
-if [ -e "$COMPILE_DIR"/app/programs/server/package.json ]; then
-  cd "$COMPILE_DIR"/app/programs/server
-  $METEOR_NPM install --production
-  cd "$BUILD_DIR"
-fi
+build_dependencies() {
+  local cache_status start
+
+  cache_status="$(get_cache_status "$CACHE_DIR")"
+  start=$(nowms)
+
+  if [ -e "$COMPILE_DIR"/app/programs/server/package.json ]; then
+    cd "$COMPILE_DIR"/app/programs/server
+    monitor "npm-install" $METEOR_NPM install --production="$production" --unsafe-perm --userconfig "$BUILD_DIR/.npmrc" 2>&1
+    cd "$BUILD_DIR"
+  fi
+
+  mtime "modules.time.cache.$cache_status" "${start}"
+
+  header "Post Build"
+  run_build_script "$BUILD_DIR"
+}
+
+log_build_scripts "$BUILD_DIR"
+run_prebuild_script "$BUILD_DIR" | output "$LOG_FILE"
+header "-----> Installing npm production dependencies on built slug" | output "$LOG_FILE"
+build_dependencies | output "$LOG_FILE"
 
 #
 # Environment
@@ -361,31 +377,7 @@ rm -rf $METEOR_DIR
 
 ###############################################################################
 
-build_dependencies() {
-  local cache_status start
 
-  cache_status="$(get_cache_status "$CACHE_DIR")"
-  start=$(nowms)
-
-  if $YARN; then
-    yarn_node_modules "$BUILD_DIR"
-  elif $PREBUILD; then
-    echo "Prebuild detected (node_modules already exists)"
-    npm_rebuild "$BUILD_DIR"
-  else
-    npm_node_modules "$BUILD_DIR"
-  fi
-
-  mtime "modules.time.cache.$cache_status" "${start}"
-
-  header "Build"
-  run_build_script "$BUILD_DIR"
-}
-
-log_build_scripts "$BUILD_DIR"
-run_prebuild_script "$BUILD_DIR" | output "$LOG_FILE"
-header "Installing dependencies" | output "$LOG_FILE"
-build_dependencies | output "$LOG_FILE"
 
 cache_build() {
   local cache_directories
