@@ -1,12 +1,48 @@
 #!/usr/bin/env bash
 # See README.md for info on running these tests.
 
-# TODO: check this test on heroku-16
-# testBowerAngularResolution() {
-#  compile "bower-angular-resolution"
-#  assertCaptured "Bower may need a resolution hint for angular"
-#  assertCapturedError
-#}
+testNpmCi() {
+  local log_file cache
+  log_file=$(mktemp)
+  cache=$(mktmpdir)
+
+  BUILDPACK_LOG_FILE="$log_file" compile "node-10-npm-ci" "$cache"
+
+   # make sure that build scripts are being called
+  assertCaptured "heroku-prebuild script"
+  assertCaptured "build script"
+  assertCaptured "postinstall script"
+  assertCapturedSuccess
+
+   # test logging
+  assertFileContains "experiment-use-npm-ci=true" "$log_file"
+  assertFileContains "supports-npm-ci=true" "$log_file"
+  assertFileContains "npm-install-time=" "$log_file"
+  assertFileContains "npm-install-memory=" "$log_file"
+
+   # test re-using the cache
+  echo "" > "$log_file"
+  BUILDPACK_LOG_FILE="$log_file" compile "node-10-npm-ci" "$cache"
+  assertCapturedSuccess
+}
+
+testNpmCiFallback() {
+  local log_file cache
+  log_file=$(mktemp)
+
+  # without a lockfile we should use "npm install" instead of "npm ci"
+  BUILDPACK_LOG_FILE="$log_file" compile "node-10-npm-ci-no-lockfile"
+
+  assertCapturedSuccess
+
+   # make sure we're in the experiment
+  assertFileContains "experiment-use-npm-ci=true" "$log_file"
+  # and detecting that we shouldn't use npm ci
+  assertFileContains "supports-npm-ci=false" "$log_file"
+  # and ran "npm install"
+  assertFileContains "npm-install-time=" "$log_file"
+  assertFileContains "npm-install-memory=" "$log_file"
+}
 
 testFlatmapStream() {
   compile "flatmap-stream"
@@ -140,7 +176,6 @@ testYarnCacheDirectory() {
   assertDirectoryExists ${cache_dir}/yarn
   # yarn frequently bumps the version number used in its cache
   # so use a wildcard here to prevent frequent CI failures
-  ls ${cache_dir}/yarn/v*/npm-lodash-4.16.4-01ce306b9bad1319f2a5528674f88297aeb70127
 
   # assert that the above ls command exited successfully, which only happens if the file exists
   assertEquals "0" "$?"
@@ -938,6 +973,14 @@ testNpmPrune56Issue() {
   assertCapturedSuccess
 }
 
+testAvoidHttpProxyVersionResolutionIssue() {
+  env_dir=$(mktmpdir)
+  # Set a non-sense http proxy address. This will cause version resolution to fail
+  echo "http://localhost:5001" > $env_dir/HTTP_PROXY
+  compile "node-10" "$(mktmpdir)" $env_dir
+  assertCapturedSuccess
+}
+
 testPluginInstallationBuildTime() {
   # The plugin should be installed for Node 8, 9, 10
   compile "node-8"
@@ -1047,6 +1090,7 @@ testBuildMetaData() {
   assertFileContains "build-time=" $log_file
   assertFileContains "app-uuid=" $log_file
   assertFileContains "build-uuid=" $log_file
+  assertFileContains "build-step=finished" $log_file
 
   # binary versions
   assertFileContains "node-version-request=10.x" $log_file
@@ -1082,10 +1126,16 @@ testBuildMetaData() {
   assertFileContains "install-yarn-binary-memory=" $log_file
   assertFileContains "install-yarn-binary-time=" $log_file
   assertFileContains "node-build-success=true" $log_file
+}
 
-  # log resolve logic dark-launch
-  assertFileContains "resolve-matches-nodebin-yarn=true" $log_file
-  assertFileContains "resolve-matches-nodebin-node=true" $log_file
+testExperimentLogging() {
+  local log_file=$(mktemp)
+
+  BUILDPACK_LOG_FILE="$log_file" compile "dummy-experiment"
+
+  # the defined experiments should be logged
+  assertFileContains "experiment-dummy=true" $log_file
+  assertFileContains "experiment-dummy-2=false" $log_file
 }
 
 testFailingBuildMetaData() {
@@ -1182,6 +1232,14 @@ compile() {
   compile_dir=$(mktmpdir)
   cp -a "$(pwd)"/* ${bp_dir}
   cp -a ${bp_dir}/test/fixtures/$1/. ${compile_dir}
+
+  # if there isn't an experiments override, add an empty one to ensure
+  # that any experiments will not influence tests unless they are
+  # explicitly defined
+  if [[ ! -f "${compile_dir}/heroku-buildpack-experiments" ]]; then
+    touch "${compile_dir}/heroku-buildpack-experiments"
+  fi
+
   capture ${bp_dir}/bin/compile ${compile_dir} ${2:-$(mktmpdir)} $3
 }
 
